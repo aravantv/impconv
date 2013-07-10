@@ -1,0 +1,106 @@
+\documentclass{llncs}
+\usepackage{xspace}
+
+\title{Implicational rewriting\\User manual}
+\author{Vincent Aravantinos}
+
+\institute{Hardware Verification Group\\Concordia University}
+\newcommand*\IMPREWRITETAC{\texttt{IMP\_REWRITE\_TAC}\xspace}
+
+\begin{document}
+
+  \maketitle
+
+  \section{Introduction.}
+		This document is the user manual of the ``impconv'' HOL Light library.
+    It provides essentially two tactics \IMPREWRITETAC and \texttt{TARGET\_REWRITE\_TAC}.
+
+	\subsubsection{Status of this document:}
+		This manual is a draft. It does not claim exhaustiveness nor perfect mathematical presentation of the specifications.
+		However it should be sufficient for a quick start with implicational rewriting.
+		It also does not cover all the functions that are available in the library, in particular those related to implicational conversions.
+		Next versions of this documentation as well as an upcoming paper will provide more information.
+
+  \subsubsection{Installation.}
+    To make use of the tactics and functions provided by this library, just type in the following inside a HOL Light session:
+
+		\bigskip
+    \texttt{> needs "target\_rewrite.ml";;}
+
+	\section{Implicational rewrite.}
+		\subsubsection{Informal specification:}
+		given a theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r$,
+    replace any occurrence of $l$ by $r$ in the goal, even if $P$ does not hold.
+		This may involve adding adding some propositional atoms (typically instantations of $P$) or existentials,
+    but in the end, you are (almost) sure that $l$ is replaced by $r$.
+
+		\subsubsection{Tactic:}\ 
+
+		$\mathtt{\IMPREWRITETAC: thm\ list \to tactic}$\\
+    Given a list of theorems $\mathtt{[th_1;\cdots;th_k]}$ of the form $\mathtt{\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r}$,
+		$\mathtt{\IMPREWRITETAC\ [th_1;\cdots;th_k]}$ applies as many implicational rewrites as it can with $\mathtt{th_1}$.
+		When no more implicational rewrites can be achieved, do the same with $\mathtt{th_2}$, etc.
+		When $\mathtt{th_k}$ is reached, start over from $\mathtt{th_1}$.
+		Repeat till no more rewrite can be achieved.
+
+		\subsubsection{Preprocessing:}
+
+		\begin{itemize}
+			\item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q$
+				is turned into $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q=true$
+
+        \emph{(try it: allows to use \IMPREWRITETAC as a \emph{deep} \texttt{MATCH\_MP\_TAC});}
+
+			\item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ \neg Q$
+				is turned into $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q=false$;
+
+			\item A theorem of the form $\forall x_1\cdots x_n.\ l=r$ is turned into $\forall x_1\cdots x_n.\ true \Rightarrow l=r$
+
+				\emph{(try it: allows to use \IMPREWRITETAC as a substitute for \texttt{REWRITE\_TAC} or even \texttt{SIMP\_TAC});}
+
+			\item If the theorem has free variables then those are added to the universally quantified $x_1,\cdots,x_n$;
+
+      \item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_k.\ Q \cdots \Rightarrow l=r$
+        is turned into $\forall x_1\cdots x_n,y_1\cdots y_k,\cdots P \wedge Q \wedge \cdots \Rightarrow l=r$;
+
+      \item A theorem of the form
+        $\forall x_1\cdots x_n.\ P \Rightarrow
+        (\forall y^1_1\cdots y^1_k.\ Q_1 \cdots \Rightarrow l_1=r_1
+        \wedge \forall y^2_1\cdots y^2_k.\ Q_2 \cdots \Rightarrow l_2=r_2
+        \wedge \cdots)$ 
+        is turned into the list of theorems
+        $\forall x_1\cdots x_n,$
+        $y^1_1\cdots y^1_k,\cdots P \wedge Q_1 \wedge \cdots \Rightarrow l_1=r_1$,
+        $\forall x_1\cdots x_n,y^2_1\cdots y^2_k,\cdots P \wedge Q_2 \wedge \cdots \Rightarrow l_2=r_2$,
+        \ldots;
+
+      \item All these operations are combined possibly yielding several theorems that are applied in parallel.
+		\end{itemize}
+
+		\subsubsection{Mathematical specification (draft):}
+		Consider the following:
+		\begin{itemize}
+			\item a theorem $th$ of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r$
+			\item a goal $g$ with a subterm $t$ matching $l$: i.e., there is a substitution $\sigma$ s.t. $t=l\sigma$
+		\end{itemize}
+		Let:
+		\begin{itemize}
+			\item $p$ be a propositional atom of $g$ containing $t$,
+			\item $z_1\cdots z_p$ be the variables among $x_1,\cdots, x_n, y_1, \cdots, y_m$ that are not instantiated by $\sigma$ and which do not occur in $l$.
+		\end{itemize}
+		Then the implicational rewrite of $g$ by $th$ replaces $p$ by:
+		\begin{itemize}
+			\item $\exists z_1\cdots z_p.\ P\sigma \wedge p'$, where $p'$ is $p$ where the term $t$ is replaced by $r\sigma$,
+				if $p$ occurs in a positive position (i.e., basically, in the conclusion of an implication and not below a negation);
+			\item $\exists z_1\cdots z_p.\ P\sigma \Rightarrow p'$, where $p'$ is $p$ where the term $t$ is replaced by $r\sigma$,
+				if $p$ occurs in a negative position (i.e., basically, in the premise of an implication or below a negation);
+		\end{itemize}
+
+	\section{Features to be documented in the following}
+
+		\begin{itemize}
+			\item \texttt{TARGET\_REWRITE\_TAC}
+			\item implicational conversions
+		\end{itemize}
+
+\end{document}
