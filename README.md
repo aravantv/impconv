@@ -1,7 +1,5 @@
 =====================================
- "Implicational conversions"
-
- Copyright, Vincent Aravantinos 2013
+Implicational conversions
 =====================================
 
 
