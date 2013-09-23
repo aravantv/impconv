@@ -1,0 +1,15 @@
+Rewriting of (part of) the library at <https://github.com/aravantv/HOL-functions-spaces> using IMP_REWRITE_TAC and TARGET_REWRITE_TAC.
+
+
+RUN:
+
+  Just type in HOL Light:
+
+  > #use "cfunspaces.ml";;
+
+
+WARNING:
+
+  This loads first the Multivariate library, which takes appx. one hour.
+  The file itself is loaded in appx. one minute.
+  
