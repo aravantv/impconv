@@ -1,11 +1,26 @@
 \documentclass{llncs}
-\usepackage{xspace}
+\usepackage{xspace,hyperref}
 
 \title{Implicational rewriting\\User manual}
 \author{Vincent Aravantinos}
 
-\institute{Hardware Verification Group\\Concordia University}
+\institute{
+  \url{vincent.aravantinos@fortiss.org}\\
+  Analysis and Design of Dependable Systems, fortiss GmbH, Munich, Germany\footnote{%
+formerly: Hardware Verification Group, Concordia University, Montreal, Canada}}
 \newcommand*\IMPREWRITETAC{\texttt{IMP\_REWRITE\_TAC}\xspace}
+\newcommand*\SEQIMPREWRITETAC{\texttt{SEQ\_IMP\_REWRITE\_TAC}\xspace}
+\newcommand*\REWRITETAC{\texttt{REWRITE\_TAC}\xspace}
+\newcommand*\ONCETAC{\texttt{ONCE\_REWRITE\_TAC}\xspace}
+\newcommand*\GENTAC{\texttt{GEN\_REWRITE\_TAC}\xspace}
+\newcommand*\SIMPTAC{\texttt{SIMP\_TAC}\xspace}
+\newcommand*\SUBGOAL{\texttt{SUBGOAL\_THEN}\xspace}
+\newcommand*\MESON{\texttt{MESON\_TAC}\xspace}
+\newcommand*\MATCHMPTAC{\texttt{MATCH\_MP\_TAC}\xspace}
+\newcommand*\TARGETTAC{\texttt{TARGET\_REWRITE\_TAC}\xspace}
+\newcommand*\HINTTAC{\texttt{HINT\_EXISTS\_TAC}\xspace}
+\newcommand*\EXISTS{\texttt{EXISTS\_TAC}\xspace}
+\newcommand*\CASETAC{\texttt{CASES\_REWRITE\_TAC}\xspace}
 
 \begin{document}
 
@@ -13,54 +28,157 @@
 
   \section{Introduction.}
 		This document is the user manual of the ``impconv'' HOL Light library.
-    It provides essentially two tactics \IMPREWRITETAC and \texttt{TARGET\_REWRITE\_TAC}.
+    It essentially provides four tactics:
+    \begin{itemize}
+      \item \IMPREWRITETAC,
+      \item \TARGETTAC,
+      \item \HINTTAC
+    \end{itemize}
+    The most useful ones are \IMPREWRITETAC and \TARGETTAC.
+    \emph{These tactics are very powerful and many proofs end up being combinations of these two tactics only.}
 
-	\subsubsection{Status of this document:}
-		This manual is a draft. It does not claim exhaustiveness nor perfect mathematical presentation of the specifications.
-		However it should be sufficient for a quick start with implicational rewriting.
-		It also does not cover all the functions that are available in the library, in particular those related to implicational conversions.
-		Next versions of this documentation as well as an upcoming paper will provide more information.
+    The general objective of these tactics is to reduce the distance between the informal reasoning
+    of the user, and the formal reasoning of the theorem prover.
+    As often, this is done through automation.
+    Contrarily to the usual automation developments, we do not target the automation of \emph{complex} reasoning
+    (e.g., arithmetic, inductive, SMT reasoning, etc.),
+    but instead focus on intuitively \emph{simple} reasoning steps which
+    translate into complex tactics sequences.
+    The underlying rationale is to leave complex reasoning to the human,
+    and simple reasoning to the machine (which is not the case currently, since a lot of informally simple
+    reasoning still ends up being formally complex).
+   
+    More concretely, these tactics have a common point: they avoid writing terms 
+    (or expressions related to terms, like paths) explicitly in proof scripts.
+    This happens generally when using \SUBGOAL, \EXISTS, or \GENTAC.
+    The motivation behind this is that such an explicit piece of information
+    is tedious and time-consuming to devise and to write.
+    Another disadvantage of writing explicitly these sorts of information is that it yields very fragile proofs:
+    definition changes, goal changes, name changes, etc., can break the tactic and therefore the whole script.
+    We basically provide here heuristics to automate the generation of such information.
 
-  \subsubsection{Installation.}
-    To make use of the tactics and functions provided by this library, just type in the following inside a HOL Light session:
+  \paragraph{Installation.}
+    To make use of these tactics, just type in the following inside a HOL Light session:
 
 		\bigskip
     \texttt{> needs "target\_rewrite.ml";;}
 
-	\section{Implicational rewrite.}
+	\section{\IMPREWRITETAC}
 		\subsubsection{Informal specification:}
-		given a theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r$,
-    replace any occurrence of $l$ by $r$ in the goal, even if $P$ does not hold.
-		This may involve adding adding some propositional atoms (typically instantations of $P$) or existentials,
+		given a theorem of the form:
+    \[\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r\]
+    \emph{implicational rewriting} replaces any occurrence of $l$ by $r$
+    in the goal, \emph{even if $P$ does not hold.}
+		This may involve adding some propositional atoms (typically instantations of $P$) or existentials,
     but in the end, you are (almost) sure that $l$ is replaced by $r$.
+    Note that $P$ can be ``empty'', in which case implicational rewriting is just rewriting.
 
-		\subsubsection{Tactic:}\ 
+    \emph{Note:} We use only first-order matching because higher-order matching happens to match ``too much''.
+    An improvement would be to define a second version of the tactic using higher-order matching.
 
+    \begin{remark}
+      Contrarily to \REWRITETAC or \SIMPTAC, the goal obtained by using implicational rewriting is generally 
+      \emph{not} equivalent to the initial goal. This is actually what makes this tactic so useful:
+      applying only ``reversible'' reasoning steps is quite a big restriction compared to all the
+      reasoning steps that could be achieved (and often wanted).
+    \end{remark}
+
+		\subsubsection{Tactic:}
 		$\mathtt{\IMPREWRITETAC: thm\ list \to tactic}$\\
-    Given a list of theorems $\mathtt{[th_1;\cdots;th_k]}$ of the form $\mathtt{\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r}$,
-		$\mathtt{\IMPREWRITETAC\ [th_1;\cdots;th_k]}$ applies as many implicational rewrites as it can with $\mathtt{th_1}$.
-		When no more implicational rewrites can be achieved, do the same with $\mathtt{th_2}$, etc.
-		When $\mathtt{th_k}$ is reached, start over from $\mathtt{th_1}$.
-		Repeat till no more rewrite can be achieved.
+    Given a list of theorems $\mathtt{[th_1;\cdots;th_k]}$
+    of the form $\mathtt{\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r}$,
+		$\mathtt{\IMPREWRITETAC\ [th_1;\cdots;th_k]}$ applies implicational rewriting using all theorems.
 
-		\subsubsection{Preprocessing:}
+    \begin{example}
+      \label{ex:imp_rewrite_tac}
+    \begin{verbatim}
+
+# REAL_DIV_REFL;;
+val it : thm = |- !x. ~(x = &0) ==> x / x = &1
+# g `!a b c. a < b ==> (a - b) / (a - b) * c = c`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b c. a < b ==> (a - b) / (a - b) * c = c`
+
+# e(IMP_REWRITE_TAC[REAL_DIV_REFL]);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b c. a < b ==> &1 * c = c /\ ~(a - b = &0) ` \end{verbatim}
+    \end{example}
+    
+
+    \subsubsection{Use:}
+    Allows to make some progress when \REWRITETAC or \SIMPTAC cannot.
+    Namely, if the precondition $P$ cannot be proved automatically, then these classic tactics cannot be used,
+    and one must generally add the precondition explicitly using \texttt{SUBGOAL\_THEN} or \texttt{SUBGOAL\_TAC}.
+    \IMPREWRITETAC allows to do this automatically.
+    Additionnaly, it can add this precondition deep in a term, actually to the deepest where it is meaningful.
+    Thus there is no need to first use \texttt{REPEAT STRIP\_TAC} (which often forces to decompose the goal
+    into subgoals whereas the user would not want to do so).
+
+    \IMPREWRITETAC can also be used like \MATCHMPTAC, but, again, deep in a term.
+    Therefore you can avoid the common preliminary \texttt{REPEAT STRIP\_TAC}.
+
+    The only disadvantages w.r.t. \REWRITETAC, \SIMPTAC and \MATCHMPTAC
+    are that \IMPREWRITETAC uses only first-order matching and is generally a little bit slower.
+
+		\subsubsection{Bonus features:}
 
 		\begin{itemize}
-			\item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q$
-				is turned into $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q=true$
+			\item A theorem of the form $\forall x_1\cdots x_n.\ l=r$
+        is turned into $\forall x_1\cdots x_n.\ true \Rightarrow l=r$
+        (this is the reason why \IMPREWRITETAC can be used as a replacement for
+        \REWRITETAC and \SIMPTAC).
 
-        \emph{(try it: allows to use \IMPREWRITETAC as a \emph{deep} \texttt{MATCH\_MP\_TAC});}
+        Therefore, in Example \ref{ex:imp_rewrite_tac}, we can actually achieve more in one step:
+    \begin{example}
+      \label{ex:imp_rewrite_tac_rewrite}
+        \begin{verbatim}
+
+# g `!a b c. a < b ==> (a - b) / (a - b) * c = c`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b c. a < b ==> (a - b) / (a - b) * c = c`
+
+#  e(IMP_REWRITE_TAC[REAL_DIV_REFL;REAL_MUL_LID;REAL_SUB_0]);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b. a < b ==> ~(a = b)` \end{verbatim}
+        And one can easily conclude with:
+        \begin{verbatim}
+#  e(IMP_REWRITE_TAC[REAL_LT_IMP_NE]);;
+val it : goalstack = No subgoals \end{verbatim}
+    \end{example}
+
+			\item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q$
+				is turned into $\forall x_1\cdots x_n.$ $\ P \Rightarrow \forall y_1\cdots y_m.\ Q=true$
+        (this is the reason why \IMPREWRITETAC can be used as a replacement for \MATCHMPTAC).
+
+        As mentionned, this is actually a \emph{deep} \MATCHMPTAC, consider for instance:
+        \begin{example}
+        \begin{verbatim}
+
+# g `!a b. &0 < a - b ==> ~(b = a)`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b. &0 < a - b ==> ~(b = a)`
+
+# e(IMP_REWRITE_TAC[REAL_LT_IMP_NE]);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b. &0 < a - b ==> b < a` \end{verbatim}
+        Actually the goal can be completely proved just by:
+        \begin{verbatim}
+# e(IMP_REWRITE_TAC[REAL_LT_IMP_NE;REAL_SUB_LT]);;
+val it : goalstack = No subgoals \end{verbatim}
+        (of course on this simple example, it would actually be enough to use \SIMPTAC)
+      \end{example}
 
 			\item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ \neg Q$
-				is turned into $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ Q=false$;
+				is turned into $\forall x_1\cdots x_n.$ $P \Rightarrow \forall y_1\cdots y_m.\ Q=false$;
 
-			\item A theorem of the form $\forall x_1\cdots x_n.\ l=r$ is turned into $\forall x_1\cdots x_n.\ true \Rightarrow l=r$
-
-				\emph{(try it: allows to use \IMPREWRITETAC as a substitute for \texttt{REWRITE\_TAC} or even \texttt{SIMP\_TAC});}
-
-			\item If the theorem has free variables then those are added to the universally quantified $x_1,\cdots,x_n$;
-
-      \item A theorem of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_k.\ Q \cdots \Rightarrow l=r$
+      \item A theorem of the form 
+        $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_k.\ Q \cdots \Rightarrow l=r$
         is turned into $\forall x_1\cdots x_n,y_1\cdots y_k,\cdots P \wedge Q \wedge \cdots \Rightarrow l=r$;
 
       \item A theorem of the form
@@ -73,34 +191,236 @@
         $y^1_1\cdots y^1_k,\cdots P \wedge Q_1 \wedge \cdots \Rightarrow l_1=r_1$,
         $\forall x_1\cdots x_n,y^2_1\cdots y^2_k,\cdots P \wedge Q_2 \wedge \cdots \Rightarrow l_2=r_2$,
         \ldots;
+		\end{itemize}
+    All these operations are combined. In practice, this entails that \emph{several deduction steps can be
+    applied using \IMPREWRITETAC with just a big list of theorems}, as show the examples above.
 
-      \item All these operations are combined possibly yielding several theorems that are applied in parallel.
-		\end{itemize}
+    \subsection{Variant: \SEQIMPREWRITETAC}
 
-		\subsubsection{Mathematical specification (draft):}
-		Consider the following:
-		\begin{itemize}
-			\item a theorem $th$ of the form $\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r$
-			\item a goal $g$ with a subterm $t$ matching $l$: i.e., there is a substitution $\sigma$ s.t. $t=l\sigma$
-		\end{itemize}
-		Let:
-		\begin{itemize}
-			\item $p$ be a propositional atom of $g$ containing $t$,
-			\item $z_1\cdots z_p$ be the variables among $x_1,\cdots, x_n, y_1, \cdots, y_m$ that are not instantiated by $\sigma$ and which do not occur in $l$.
-		\end{itemize}
-		Then the implicational rewrite of $g$ by $th$ replaces $p$ by:
-		\begin{itemize}
-			\item $\exists z_1\cdots z_p.\ P\sigma \wedge p'$, where $p'$ is $p$ where the term $t$ is replaced by $r\sigma$,
-				if $p$ occurs in a positive position (i.e., basically, in the conclusion of an implication and not below a negation);
-			\item $\exists z_1\cdots z_p.\ P\sigma \Rightarrow p'$, where $p'$ is $p$ where the term $t$ is replaced by $r\sigma$,
-				if $p$ occurs in a negative position (i.e., basically, in the premise of an implication or below a negation);
-		\end{itemize}
+    \subsubsection{Tactic:}
+		$\mathtt{\SEQIMPREWRITETAC: thm\ list \to tactic}$\\
+    Same as \IMPREWRITETAC but uses the provided theorems \emph{sequentially} instead of simultaneously:
+    given a list of theorems $\mathtt{[th_1;\cdots;th_k]}$,
+    $\mathtt{\SEQIMPREWRITETAC}$ $\mathtt{[th_1;\cdots;th_k]}$ applies as many implicational rewriting
+    as it can with $\mathtt{th_1}$, then with $\mathtt{th_2}$, etc.
+		When $\mathtt{th_k}$ is reached, start over from $\mathtt{th_1}$.
+		Repeat till no more rewrite can be achieved.
 
-	\section{Features to be documented in the following}
+    \begin{example}
+      Recall example \ref{ex:imp_rewrite_tac_rewrite}:
+        \begin{verbatim}
+# g `!a b c. a < b ==> (a - b) / (a - b) * c = c`;;
+val it : goalstack = 1 subgoal (1 total)
 
-		\begin{itemize}
-			\item \texttt{TARGET\_REWRITE\_TAC}
-			\item implicational conversions
-		\end{itemize}
+`!a b c. a < b ==> (a - b) / (a - b) * c = c`
+
+#  e(IMP_REWRITE_TAC[REAL_DIV_REFL;REAL_MUL_LID;REAL_SUB_0;
+  REAL_LT_IMP_NE]);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b. ~(a < b)` \end{verbatim}
+        But with \SEQIMPREWRITETAC, the same sequence of theorems solves the goal:
+        \begin{verbatim}
+#  e(SEQ_IMP_REWRITE_TAC[REAL_DIV_REFL;REAL_MUL_LID;REAL_SUB_0;
+  REAL_LT_IMP_NE]);;
+val it : goalstack = No subgoals \end{verbatim}
+      \end{example}
+
+    \subsubsection{Use:}
+    This addresses a problem which happens already with \REWRITETAC or \SIMPTAC:
+    one generally rewrites with one theorem, then with another, etc.
+    and, in the end, once every step is done, (s)he packs everything in a list and provides this list
+    to \IMPREWRITETAC; but it then happens that some surprises happen at this point
+    because the simultaneous use of all theorems does not yield the same result as their subsequent use.
+    A usual solution is simply to decompose the call into two calls by identifying manually
+    which theorems are the source of the unexpected behavior when used together.
+    Or one can simply use \SEQIMPREWRITETAC.
+    Note that this is however a lot slower than \IMPREWRITETAC,
+    therefore I advise to first use \IMPREWRITETAC and if it does not work like the sequential use of
+    single implicational rewrites then use \SEQIMPREWRITETAC.
+
+  \subsection{Variant: \CASETAC}
+		\subsubsection{Informal specification:}
+		given a theorem of the form:
+    \[\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r\]
+    \emph{case rewriting} replaces any atom $A$ containing an occurrence of $l$
+    by $(P \Rightarrow A[l\to r]) \wedge (\neg P \Rightarrow A)$.
+
+    \begin{example}
+    \begin{verbatim}
+
+# g `!a b c. a < b ==> (a - b) / (a - b) * c = c`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b c. a < b ==> (a - b) / (a - b) * c = c`
+
+# e(CASE_REWRITE_TAC REAL_DIV_REFL);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!a b c.
+     a < b
+     ==> (~(a - b = &0) ==> &1 * c = c) /\
+         (a - b = &0 ==> (a - b) / (a - b) * c = c)` \end{verbatim}
+    \end{example}
+
+		\subsubsection{Tactic:}
+		$\mathtt{\CASETAC: thm \to tactic}$\\
+    Same usage as \IMPREWRITETAC but applies case rewriting instead of implicational rewriting.
+    Note that it takes only one theorem since in practice there is
+    seldom a need to apply this tactic subsequently with several theorems.
+
+    \subsubsection{Use:} Similar to \IMPREWRITETAC, but instead of assuming that a precondition holds,
+    one just wants to make a distinction between the case where this precondition holds, and the one where it
+    does not.
+
+    \newpage
+  \section{\TARGETTAC}
+		\subsubsection{Informal specification:}
+    Given a theorem \texttt{th} (the ``support theorem''),
+    and another theorem $\mathtt{uh}$ (the ``target theorem''),
+    \emph{target rewriting} generates all the goals that can be obtained by rewriting
+    with \texttt{th}, until it becomes possible to rewrite with \texttt{uh}.
+
+    To understand better the difference with \REWRITETAC and the need for a target theorem,
+    consider a goal $g$ where more than one subterm can be rewritten using \texttt{th}:
+    with \REWRITETAC, all such subterms are rewritten simultaneously; whereas, with \TARGETTAC,
+    every of these subterms are rewritten \emph{independently}, thus yielding as many goals.
+    If one of these goals can be rewritten (in one position or more) by \texttt{uh}, then
+    the tactic returns this goal.
+    Otherwise, the ``one-subterm rewriting'' is applied again on every of the new goals,
+    iteratively until a goal which can be rewritten by \texttt{uh} is obtained.
+
+		\subsubsection{Tactic:} 
+		$\mathtt{\TARGETTAC: thm\ list \to thm \to tactic}$\\
+    Given a list of theorems $\mathtt{[th_1;\cdots;th_k]}$
+    of the form $\mathtt{\forall x_1\cdots x_n.\ P \Rightarrow \forall y_1\cdots y_m.\ l = r}$,
+    and a theorem \texttt{uh},
+		$\mathtt{\TARGETTAC\ [th_1;\cdots;th_k]\ uh}$ applies target rewriting using the whole list of theorems
+    instead of just one support theorem. As one can see from the required form of the theorem,
+    the tactic uses implicational rewriting instead of just rewriting, which makes it even more powerful.
+
+    \subsubsection{Examples:}
+    \begin{example}
+    \begin{verbatim}
+
+# REAL_ADD_RINV;;
+val it : thm = |- !x. x + --x = &0
+# g `!x y z. --y + x + y = &0`;;
+Warning: inventing type variables
+val it : goalstack = 1 subgoal (1 total)
+
+`!x y z. --y + x + y = &0`
+
+# e(TARGET_REWRITE_TAC[REAL_ADD_AC] REAL_ADD_RINV);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!x. x + &0 = &0` \end{verbatim}
+    \end{example}
+
+    \begin{example}
+    The following example shows how \emph{implicational} rewriting can even be used:
+    \begin{verbatim}
+# REAL_MUL_RINV;;
+val it : thm = |- !x. ~(x = &0) ==> x * inv x = &1
+# g `!x y z. inv y * x * y = x`;;
+Warning: inventing type variables
+val it : goalstack = 1 subgoal (1 total)
+
+`!x y z. inv y * x * y = x`
+
+# e(TARGET_REWRITE_TAC[REAL_MUL_AC] REAL_MUL_RINV);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!x y. x * &1 = x /\ ~(y = &0)` \end{verbatim}    
+    \end{example}
+
+    \begin{example}
+    Let us finally consider an example which does not involve associativity and commutativity.
+    Consider the following goal:
+    \begin{verbatim}
+# g `!z. norm (cnj z) = norm z`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!z. norm (cnj z) = norm z` \end{verbatim}
+    A preliminary step here is to decompose the left-side $z$ into its polar coordinates, 
+    i.e., to turn it into $|z|.e^{i*arg(z)}$.
+    This can be done by applying the following theorem:
+    \begin{verbatim}
+# ARG;;
+val it : thm =
+  |- !z. &0 <= Arg z /\
+         Arg z < &2 * pi /\
+         z = Cx (norm z) * cexp (ii * Cx (Arg z)) \end{verbatim}
+    But using standard rewriting would rewrite both sides and would not terminate
+    (or actually, in the current implementation of \REWRITETAC, simply would not apply).
+    Instead we can use \TARGETTAC by noting that we actually plan to decompose into polar coordinates 
+    with the intention of using \texttt{CNJ\_MUL} afterwards, which yields:
+    \begin{verbatim}
+# e(TARGET_REWRITE_TAC[ARG] CNJ_MUL);;
+val it : goalstack = 1 subgoal (1 total)
+
+`!z. norm (cnj (Cx (norm z)) * cnj (cexp (ii * Cx (Arg z)))) 
+  = norm z` \end{verbatim}
+    \end{example}
+
+    \subsubsection{Use:} This tactic is useful each time someone does not want to rewrite a theorem everywhere
+    or if a rewriting diverges.
+    Therefore, it can replace most calls to \ONCETAC or \GENTAC:
+    most of the time, these tactics are used to control rewriting more precisely than \REWRITETAC.
+    However, their use is tedious and time-consuming whereas the corresponding reasoning is not complex.
+    In addition, even when the user manages to come out with a working tactic,
+    this tactic is generally very fragile.
+    Instead, with \TARGETTAC, the user does not have to think about the low-level control of rewriting
+    but just gives the theorem which corresponds to the next step in the proof (see examples):
+    this is extremely simple and fast to devise.
+    Note in addition that, contrarily to an explicit (and therefore fragile) path,
+    the target theorem represents a reasoning step which has few chances to change in further refinements
+    of the script.
+
+
+  \section{\HINTTAC}
+
+		\subsubsection{Informal specification:}
+    Given a goal which contains some subformula of the form $\exists x. \cdots \wedge P x \wedge \cdots$
+    in a context where $P\ t$ holds for some $t$, then instantiates $x$ with $t$.
+
+    \emph{Note:} it is enough that just $P\ t$ holds, not the complete existentially quantified formula
+    As the name suggests, we just use the context as a ``hint'' but it is (in most general uses)
+    not sufficient to solve the existential completely: if this is doable automatically,
+    then other techniques can do the job in a better way (typically \MESON).
+
+		\subsubsection{Tactic:} 
+		$\mathtt{\HINTTAC: tactic}$\\
+    Given a goal which contains some subformula of the form
+    $\exists x_1\cdots x_k. P_1\ y^1_1\ \cdots\ y^1_{m_1} \wedge \cdots \wedge P_n\ y^n_1\ \cdots\ y^n_{m_n}$
+    in a context where $P_i\ t_1\ \cdots\ t_{m_i}$ holds for some $t_1,\cdots,t_{m_i}$,
+    then instantiates $x^i_1,\cdots,x^i_{m_i}$ with $t_1,\cdots,t_{m_i}$.
+    The ``context'' consists in the assumptions or in the premisses of the implications where
+    the existential subformula occurs.
+
+    \begin{example}
+      \begin{verbatim}
+
+# g `!P Q R S. P 1 /\ Q 2 /\ R 3 ==> ?x y. P x /\ R y /\ S x y`;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!P Q R S. P 1 /\ Q 2 /\ R 3 ==> (?x y. P x /\ R y /\ S x y)`
+
+# e HINT_EXISTS_TAC;;
+val it : goalstack = 1 subgoal (1 total)
+
+`!P Q R S. P 1 /\ Q 2 /\ R 3 ==> S 1 3` \end{verbatim}
+    \end{example}
+
+    \subsubsection{Use:} When facing an existential goal, it happens often that the context
+    ``suggests'' a candidate to be a witness.
+    In many cases, this is because the existential goal is partly satisfied by a proposition
+    in the context.
+    However, often, the context does not allow to automatically prove completely
+    the existential using this witness. Therefore, usual automation tactics are useless.
+    Usually, in such circumstances, one has to provide the witness explicitly.
+    This is tedious and time-consuming whereas this witness can be found automatically from the context,
+    this is what this tactic allows to do.
+
 
 \end{document}
