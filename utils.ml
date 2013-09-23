@@ -18,12 +18,18 @@ let UNDISCH_TERM th =
   let p = (fst o dest_imp o concl) th in
   p,UNDISCH th;;
 
-(* Applies the function [f] to the conclusion of an implicational theorem. *)
+(* Same as [UNDISCH_ALL] but also returns the undischarged terms *)
+let rec UNDISCH_TERMS th =
+  try
+    let t,th' = UNDISCH_TERM th in
+    let ts,th'' = UNDISCH_TERMS th' in
+    t::ts,th''
+  with Failure _ -> [],th;;
+
+(* Comblies the function [f] to the conclusion of an implicational theorem. *)
 let MAP_CONCLUSION f th =
   let p,th = UNDISCH_TERM th in
   DISCH p (f th);;
-
-let wrap f x = f [x];;
 
 let strip_conj = binops `(/\)`;;
 
@@ -31,7 +37,7 @@ let strip_conj = binops `(/\)`;;
 let rec tryfind_fun fs x =
   match fs with
   |[] -> failwith "tryfind_fun"
-  |f::fs' -> try f x with _ -> tryfind_fun fs' x;;
+  |f::fs' -> try f x with Failure _ -> tryfind_fun fs' x;;
 
 (* Same as [mapfilter] but also provides the rank of the iteration as an 
  * argument to [f]. *)
@@ -43,6 +49,10 @@ let mapfilteri f =
         try f i h :: rest with Failure _ -> rest
   in
   self 0;;
+
+let list_of_option = function None -> [] | Some x -> [x];;
+
+let try_list f x = try f x with Failure _ -> [];;
 
 (* A few constants. *)
 let A_ = `A:bool` and B_ = `B:bool` and C_ = `C:bool` and D_ = `D:bool`;;
@@ -87,7 +97,7 @@ let rec DISCH_CONJ t th =
   try
     let t1,t2 = dest_conj t in
     REWR_RULE IMP_IMP (DISCH_CONJ t1 (DISCH_CONJ t2 th))
-  with _ -> DISCH t th;;
+  with Failure _ -> DISCH t th;;
 
 (* Specializes all the universally quantified variables of a theorem,
  * and returns both the theorem and the list of variables.
@@ -97,31 +107,24 @@ let rec SPEC_VARS th =
     let v,th' = SPEC_VAR th in
     let vs,th'' = SPEC_VARS th' in
     v::vs,th''
-  with _ -> [],th;;
+  with Failure _ -> [],th;;
 
-(* Applies the function [f] to the body of a universally quantified theorem. *)
+(* Comblies the function [f] to the body of a universally quantified theorem. *)
 let MAP_FORALL_BODY f th =
   let vs,th = SPEC_VARS th in
   GENL vs (f th);;
 
-(* Given a theorem [~th], returns [th<=>F],
- * for any other theorem returns [th<=>T].
+(* Given a theorem of the form [!xyz. P ==> !uvw. C] and a function [f],
+ * return [!xyz. P ==> !uvw. f C].
  *)
-let GEN_EQT_INTRO th = try EQF_INTRO th with _ -> EQT_INTRO th;;
-
-(* Expects a theorem of the form `!xyz. P ==> C`
- * Returns `!xyz. P ==> C = T` *)
-let GEQT_INTRO1 = MAP_FORALL_BODY (MAP_CONCLUSION GEN_EQT_INTRO);;
-
-(* Expects a theorem of the form `!xyz. P ==> !xyz. C`
- * Returns `!xyz. P ==> !xyz. (C = T)` *)
-let GEQT_INTRO2 =
-  MAP_FORALL_BODY (MAP_CONCLUSION (MAP_FORALL_BODY GEN_EQT_INTRO));;
+let GEN_MAP_CONCLUSION = MAP_FORALL_BODY o MAP_CONCLUSION o MAP_FORALL_BODY
 
 (* Turn a theorem of the form [x ==> y /\ z] into [(x==>y) /\ (x==>z)].
  * Also deals with universal quantifications if necessary
  * (e.g., [x ==> !v. y /\ z] will be turned into
  * [(x ==> !v. y) /\ (x ==> !v. z)])
+ *
+ * possible improvement: apply the rewrite more locally
  *)
 let IMPLY_AND =
   let IMPLY_AND_RDISTRIB = TAUT `(x ==> y /\ z) <=> (x==>y) /\(x==>z)` in
@@ -135,15 +138,76 @@ let dest_binary_blind = function
   |Comb(Comb(_,l),r) -> l,r
   |_ -> failwith "dest_binary_blind";;
 
-(* Ordering among theorems. *)
+let spec_all = repeat (snd o dest_forall);;
+
 let thm_lt (th1:thm) th2 = th1 < th2;;
+
+(* GMATCH_MP (U1 |- !x1...xn. H1 /\ ... /\ Hk ==> C) (U2 |- P)
+ * = (U1 u U2 |- !y1...ym. G1' /\ ... /\ Gl' ==> C')
+ * where:
+ * - P matches some Hi
+ * - C' is the result of applying the matching substitution to C
+ * - Gj' is the result of applying the matching substitution to Hj
+ * - G1',...,Gl' is the list corresponding to H1,...,Hk but without Hi
+ * - y1...ym are the variables among x1,...,xn that are not instantiated
+ *
+ * possible improvement: make a specific conversion,
+ * define a MATCH_MP that also returns the instantiated variables *)
+let GMATCH_MP =
+  let swap = CONV_RULE (REWR_CONV (TAUT `(p==>q==>r) <=> (q==>p==>r)`)) in
+  fun th1 ->
+    let vs,th1' = SPEC_VARS th1 in
+    let hs,th1'' = UNDISCH_TERMS (PURE_REWRITE_RULE [IMP_CONJ] th1') in
+    fun th2 ->
+      let f h hs =
+        let th1''' = DISCH h th1'' in
+        let th1'''' =
+          try swap (DISCH_IMP_IMP hs th1''') with Failure _ -> th1'''
+        in
+        MATCH_MP (GENL vs th1'''') th2
+      in
+      let rec loop acc = function
+        |[] -> []
+        |h::hs -> 
+            (try [f h (acc @ hs)] with Failure _ -> []) @ loop (h::acc) hs
+      in
+      loop [] hs;;
+
+let GMATCH_MPS ths1 ths2 =
+  let insert (y:thm) = function
+    |[] -> [y]
+    |x::_ as xs when equals_thm x y -> xs
+    |x::xs when thm_lt x y -> x :: insert y xs
+    |_::_ as xs -> y::xs
+  in
+  let inserts ys = itlist insert ys in
+  match ths1 with
+  |[] -> []
+  |th1::ths1' ->
+    let rec self acc th1 ths1 = function
+      |[] -> (match ths1 with [] -> acc | th::ths1' -> self acc th ths1' ths2)
+      |th2::ths2' -> self (inserts (GMATCH_MP th1 th2) acc) th1 ths1 ths2' 
+    in
+    self [] th1 ths1' ths2;;
+
+let MP_CLOSURE ths1 ths2 =
+  let ths1 = filter (is_imp o spec_all o concl) ths1 in
+  let rec self ths2 = function
+    |[] -> []
+    |_::_ as ths1 ->
+      let ths1'' = GMATCH_MPS ths1 ths2 in
+      self ths2 ths1'' @ ths1''
+  in
+  self ths2 ths1;;
 
 (* Set of terms. Implemented as ordered lists. *)
 module Tset =
   struct
     type t = term list
+    let cmp (x:term) y = Pervasives.compare x y
     let lt (x:term) y = Pervasives.compare x y < 0
-    let variables = sort lt o variables
+    let lift f = List.sort cmp o f
+    let of_list = lift I
     let insert ts t =
       let rec self = function
         |[] -> [t]
@@ -151,7 +215,7 @@ module Tset =
         |x::_ as xs when x = t -> xs
         |xs -> t::xs
       in
-      self ts
+      if t = T_ then ts else self ts
     let remove ts t =
       let rec self = function
         |[] -> []
@@ -165,7 +229,7 @@ module Tset =
         try
           let t1,t2 = dest_conj t in
           self (self acc t1) t2
-        with _ -> insert acc t
+        with Failure _ -> insert acc t
       in
       self []
     let rec union l1 l2 =
@@ -177,41 +241,74 @@ module Tset =
           |h2::t2 when lt h1 h2 -> h1::union t1 l2
           |h2::t2 when h1 = h2 -> h1::union t1 t2
           |h2::t2 -> h2::union l1 t2
+    let rec mem x = function
+      |x'::xs when x' = x -> true
+      |x'::xs when lt x' x -> mem x xs
+      |_ -> false
+    let subtract l1 l2 = filter (fun x -> not (mem x l2)) l1;;
     let empty = []
+    let flat_revmap f =
+      let rec self acc = function
+        |[] -> acc
+        |x::xs -> self (union (f x) acc) xs
+      in
+      self [];;
+    let flat_map f = flat_revmap f o rev;;
+    let rec frees acc = function
+      |Var _ as t -> insert acc t
+      |Const _ -> acc
+      |Abs(v,b) -> remove (frees acc b) v
+      |Comb(u,v) -> frees (frees acc u) v
+    let freesl ts = itlist (C frees) ts empty
+    let frees = frees empty
   end;;
 
-(* Context of a conversion.
- * Basically a list of boolean terms.
- * We also handle variables in these terms indepedently in order to avoid
- * redundant calls to [variables].
- *)
-module Context =
+module Type_annoted_term =
   struct
-    type t = term list * Tset.t
-    let empty = [],Tset.empty
-    let lt (x:term) y = Pervasives.compare x y < 0
-    let augment_atom (ts,vs) a =
-      let rec self = function
-        |[] -> [a]
-        |x::xs when lt x a -> x::self xs
-        |x::_ as xs when x = a -> xs
-        |xs -> a::xs
-      in
-      self ts,Tset.union vs (Tset.variables a)
-    let augment ctx t = itlist (C augment_atom) (strip_conj t) ctx
-    let augments ctx ts = itlist (C augment) ts ctx
-    let terms_of (ts,_) = ts
-    let make = augments empty
-    let variables_of (_,vs) = vs
-    let mem (ts,_) t =
-      let rec self = function
-        |[] -> false
-        |x::xs when lt x t -> self xs
-        |x::xs when x = t -> true
-        |_::_ -> false
-      in
-      self ts
-    let remove_variable (ts,vs) v =
-      (filter (not o vfree_in v) ts,Tset.remove vs v)
+    type t =
+      |Var_ of string * hol_type
+      |Const_ of string * hol_type * term
+      |Comb_ of t * t * hol_type
+      |Abs_ of t * t * hol_type
+
+    let type_of = function
+      |Var_(_,ty) -> ty
+      |Const_(_,ty,_) -> ty
+      |Comb_(_,_,ty) -> ty
+      |Abs_(_,_,ty) -> ty
+
+    let rec of_term = function
+      |Var(s,ty) -> Var_(s,ty)
+      |Const(s,ty) as t -> Const_(s,ty,t)
+      |Comb(u,v) ->
+          let u' = of_term u and v' = of_term v in
+          Comb_(u',v',snd (dest_fun_ty (type_of u')))
+      |Abs(x,b) ->
+          let x' = of_term x and b' = of_term b in
+          Abs_(x',b',mk_fun_ty (type_of x') (type_of b'))
+
+    let rec equal t1 t2 =
+      match t1,t2 with
+      |Var_(s1,ty1),Var_(s2,ty2)
+      |Const_(s1,ty1,_),Const_(s2,ty2,_) -> s1 = s2 & ty1 = ty2
+      |Comb_(u1,v1,_),Comb_(u2,v2,_) -> equal u1 u2 & equal v1 v2
+      |Abs_(v1,b1,_),Abs_(v2,b2,_) -> equal v1 v2 & equal b1 b2
+      |_ -> false
+
+    let rec to_term = function
+      |Var_(s,ty) -> mk_var(s,ty)
+      |Const_(_,_,t) -> t
+      |Comb_(u,v,_) -> mk_comb(to_term u,to_term v)
+      |Abs_(v,b,_) -> mk_abs(to_term v,to_term b)
+
+    let dummy = Var_("",aty)
+
+    let rec find_term p t =
+      if p t then t else
+        match t with
+        |Abs_(_,b,_) -> find_term p b
+        |Comb_(u,v,_) -> try find_term p u with Failure _ -> find_term p v
+        |_ -> failwith "Annot.find_term";;
   end;;
 
+module Annot = Type_annoted_term;;
