@@ -7,6 +7,7 @@ This HOL Light library provides essentially three tactics:
   - IMP_REWRITE_TAC
   - TARGET_REWRITE_TAC
   - HINT_EXISTS_TAC
+
 The most useful ones are IMP_REWRITE_TAC and TARGET_REWRITE_TAC.
 These tactics are very powerful and many proofs end up being combinations of these two tactics only.
 
