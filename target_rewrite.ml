@@ -3,10 +3,13 @@
 (*                       Target rewriting.                                   *)
 (*                                                                           *)
 (*   (c) Copyright, Vincent Aravantinos, 2012-2013                           *)
-(*                  Hardware Verification Group,                             *)
+(*                  Analysis and Design of Dependable Systems                *)
+(*                  fortiss GmbH, Munich, Germany                            *)
+(*                                                                           *)
+(*       Formerly:  Hardware Verification Group,                             *)
 (*                  Concordia University                                     *)
 (*                                                                           *)
-(*           Contact: <vincent@ece.concordia.ca>                             *)
+(*           Contact: <vincent.aravantinos@fortiss.org>                      *)
 (*                                                                           *)
 (* ========================================================================= *)
 
@@ -157,7 +160,7 @@ let rec SUB_CTXIMPMCONV =
         ((match n with
         |"==>" -> IMP_CTXIMPMCONV
         |"/\\" -> CONJ_CTXIMPMCONV
-        |"\//" -> DISJ_CTXIMPMCONV
+        |"\\/" -> DISJ_CTXIMPMCONV
         |"!" -> FORALL_CTXIMPMCONV
         |"?" -> EXISTS_CTXIMPMCONV
         |"~" -> NOT_CTXIMPMCONV
@@ -204,15 +207,14 @@ type annot_mconv = term -> (thm * term option * term list) list;;
  *)
 let target_pat_cnv_of_thm th : (term * (term list->annot_conv)) =
   let th = SPEC_ALL th in
-  let c = concl th in
-  match snd (strip_forall c) with
+  match concl th with
   |Comb(Comb(Const("=",_),l),_) -> l,C REWR_ANNOTCONV th
   |Comb(Comb(Const("==>",_),_),c) ->
       let pat,th' =
         match c with
         |Comb(Comb(Const("=",_),l),_) -> l, th
         |Comb(Const("~",_),l) -> l, GEN_MAP_CONCLUSION EQF_INTRO th
-        |l -> l, GEN_MAP_CONCLUSION EQT_INTRO th
+        |l -> c, GEN_MAP_CONCLUSION EQT_INTRO th
       in
       pat, C IMPREWR_CONV th'
   |Comb(Const("~",_),l) -> l, C REWR_ANNOTCONV (EQF_INTRO th)

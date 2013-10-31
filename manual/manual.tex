@@ -20,7 +20,7 @@ formerly: Hardware Verification Group, Concordia University, Montreal, Canada}}
 \newcommand*\TARGETTAC{\texttt{TARGET\_REWRITE\_TAC}\xspace}
 \newcommand*\HINTTAC{\texttt{HINT\_EXISTS\_TAC}\xspace}
 \newcommand*\EXISTS{\texttt{EXISTS\_TAC}\xspace}
-\newcommand*\CASETAC{\texttt{CASES\_REWRITE\_TAC}\xspace}
+\newcommand*\CASETAC{\texttt{CASE\_REWRITE\_TAC}\xspace}
 
 \begin{document}
 
@@ -327,7 +327,7 @@ val it : goalstack = 1 subgoal (1 total)
     \begin{verbatim}
 # REAL_MUL_RINV;;
 val it : thm = |- !x. ~(x = &0) ==> x * inv x = &1
-# g `!x y z. inv y * x * y = x`;;
+# g `!x y. inv y * x * y = x`;;
 Warning: inventing type variables
 val it : goalstack = 1 subgoal (1 total)
 

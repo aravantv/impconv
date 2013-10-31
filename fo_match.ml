@@ -3,10 +3,13 @@
 (*           First-order matching and nets.                                  *)
 (*                                                                           *)
 (*   (c) Copyright, Vincent Aravantinos, 2012-2013                           *)
-(*                  Hardware Verification Group,                             *)
+(*                  Analysis and Design of Dependable Systems                *)
+(*                  fortiss GmbH, Munich, Germany                            *)
+(*                                                                           *)
+(*       Formerly:  Hardware Verification Group,                             *)
 (*                  Concordia University                                     *)
 (*                                                                           *)
-(*           Contact: <vincent@ece.concordia.ca>                             *)
+(*           Contact: <vincent.aravantinos@fortiss.org>                      *)
 (*                                                                           *)
 (* ========================================================================= *)
 
@@ -98,9 +101,9 @@ module Fo_nets =
       |Cnet of string * int
       |Lnet of int
 
-    type 'a t = Netnode of (term_label * 'a t) list * 'a list;;
+    type 'a t = Netnode of (term_label * 'a t) list * 'a list
 
-    let empty_net = Netnode([],[]);;
+    let empty_net = Netnode([],[])
 
     let enter =
       let label_to_store lcs t =
@@ -125,7 +128,7 @@ module Fo_nets =
             let new_child = net_update lcs elem child (nts@rts) in
             Netnode ((label,new_child)::others,tips)
       in
-      fun lcs (t,elem) net -> net_update lcs elem net [t];;
+      fun lcs (t,elem) net -> net_update lcs elem net [t]
 
     let lookup =
       let label_for_lookup t =

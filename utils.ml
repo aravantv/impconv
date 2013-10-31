@@ -3,10 +3,13 @@
 (*                       Utilities.                                          *)
 (*                                                                           *)
 (*   (c) Copyright, Vincent Aravantinos, 2012-2013                           *)
-(*                  Hardware Verification Group,                             *)
+(*                  Analysis and Design of Dependable Systems                *)
+(*                  fortiss GmbH, Munich, Germany                            *)
+(*                                                                           *)
+(*       Formerly:  Hardware Verification Group,                             *)
 (*                  Concordia University                                     *)
 (*                                                                           *)
-(*           Contact: <vincent@ece.concordia.ca>                             *)
+(*           Contact: <vincent.aravantinos@fortiss.org>                      *)
 (*                                                                           *)
 (* ========================================================================= *)
 
@@ -245,15 +248,15 @@ module Tset =
       |x'::xs when x' = x -> true
       |x'::xs when lt x' x -> mem x xs
       |_ -> false
-    let subtract l1 l2 = filter (fun x -> not (mem x l2)) l1;;
+    let subtract l1 l2 = filter (fun x -> not (mem x l2)) l1
     let empty = []
     let flat_revmap f =
       let rec self acc = function
         |[] -> acc
         |x::xs -> self (union (f x) acc) xs
       in
-      self [];;
-    let flat_map f = flat_revmap f o rev;;
+      self []
+    let flat_map f = flat_revmap f o rev
     let rec frees acc = function
       |Var _ as t -> insert acc t
       |Const _ -> acc
@@ -308,7 +311,7 @@ module Type_annoted_term =
         match t with
         |Abs_(_,b,_) -> find_term p b
         |Comb_(u,v,_) -> try find_term p u with Failure _ -> find_term p v
-        |_ -> failwith "Annot.find_term";;
+        |_ -> failwith "Annot.find_term"
   end;;
 
 module Annot = Type_annoted_term;;

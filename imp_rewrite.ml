@@ -3,10 +3,13 @@
 (*                   Implicational rewriting.                                *)
 (*                                                                           *)
 (*   (c) Copyright, Vincent Aravantinos, 2012-2013                           *)
-(*                  Hardware Verification Group,                             *)
+(*                  Analysis and Design of Dependable Systems                *)
+(*                  fortiss GmbH, Munich, Germany                            *)
+(*                                                                           *)
+(*       Formerly:  Hardware Verification Group,                             *)
 (*                  Concordia University                                     *)
 (*                                                                           *)
-(*           Contact: <vincent@ece.concordia.ca>                             *)
+(*           Contact: <vincent.aravantinos@fortiss.org>                      *)
 (*                                                                           *)
 (* ========================================================================= *)
 
@@ -101,7 +104,7 @@ let ORDER_ANNOTCONV cnv t =
 let pat_cnv_of_thm th : (term * (term list->annot_conv)) =
   let th = SPEC_ALL th in
   let lconsts = freesl (hyp th) and c = concl th in
-  match snd (strip_forall c) with
+  match c with
   |Comb(Comb(Const("=",_),l),r) as t -> 
       let matches = C (can o term_match lconsts) in
       if free_in l r or (matches l r & matches r l)

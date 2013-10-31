@@ -3,10 +3,13 @@
 (*                 Implicational conversions.                                *)
 (*                                                                           *)
 (*   (c) Copyright, Vincent Aravantinos, 2012-2013                           *)
-(*                  Hardware Verification Group,                             *)
+(*                  Analysis and Design of Dependable Systems                *)
+(*                  fortiss GmbH, Munich, Germany                            *)
+(*                                                                           *)
+(*       Formerly:  Hardware Verification Group,                             *)
 (*                  Concordia University                                     *)
 (*                                                                           *)
-(*           Contact: <vincent@ece.concordia.ca>                             *)
+(*           Contact: <vincent.aravantinos@fortiss.org>                      *)
 (*                                                                           *)
 (* ========================================================================= *)
 
@@ -221,7 +224,7 @@ let MKIMP_CONJ_CONTRA_CTXT =
     let a,bcd = dest_imp (concl th2) in
     let b,cd = dest_imp bcd in
     let c,d = dest_imp cd in
-    MP (INST [a,A_;b,B_;c,C_;d,D_] lem) (CONJ th1 th2)
+    MP (INST [a,A_;b,B_;c,C_;d,D_] lem) (CONJ th1 th2);;
 
 let MKIMPL_CONJ_CONTRA_CTXT =
   let lem = TAUT `(C==>A==>B) ==> (A/\C==>B/\C)` in
@@ -242,7 +245,7 @@ let MKIMP_CONJ_CO_CTXT =
   fun th1 th2 ->
     let b,a = dest_imp (concl th1) in
     let d,c = dest_imp (snd (dest_imp (concl th2))) in
-    MP (INST [a,A_;b,B_;c,C_;d,D_] lem) (CONJ th1 th2)
+    MP (INST [a,A_;b,B_;c,C_;d,D_] lem) (CONJ th1 th2);;
 
 let MKIMPL_CONJ_CO_CTXT =
   let lem = TAUT `(B==>A) ==> (B/\C==>A/\C)` in
@@ -518,7 +521,7 @@ let rec SUB_CTXIMPCONV =
         ((match n with
         |"==>" -> IMP_CTXIMPCONV
         |"/\\" -> CONJ_CTXIMPCONV
-        |"\//" -> DISJ_CTXIMPCONV
+        |"\\/" -> DISJ_CTXIMPCONV
         |"=" when ty = iff_ty -> IFF_CTXIMPCONV
         |"!" -> FORALL_CTXIMPCONV
         |"?" -> EXISTS_CTXIMPCONV

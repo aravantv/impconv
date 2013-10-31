@@ -24,7 +24,7 @@ reasoning still ends up being formally complex).
 
 More concretely, these tactics have a common point: they avoid writing terms 
 (or expressions related to terms, like paths) explicitly in proof scripts.
-This happens generally when using \SUBGOAL, \EXISTS, or \GENTAC.
+This happens generally when using SUBGOAL_THEN, EXISTS_TAC, or GEN_TAC.
 The motivation behind this is that such an explicit piece of information
 is tedious and time-consuming to devise and to write.
 Another disadvantage of writing explicitly these sorts of information is that it yields very fragile proofs:
