@@ -2,6 +2,7 @@
 Implicational conversions
 =====================================
 
+Note: This library is now integrated in the official distribution of HOL Light (since Feb. 24th)
 
 This HOL Light library provides essentially three tactics:
   - IMP_REWRITE_TAC
